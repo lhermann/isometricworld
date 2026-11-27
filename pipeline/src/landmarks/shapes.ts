@@ -8,8 +8,8 @@
 
 export type P2 = [number, number];
 /** bare: 1 = no roof furniture; 2 = also a bridge deck: a drop shadow instead of a footprint shadow; 3 = no shadow (hand-built
- * structures whose footprint is only a bounding box) */
-export type Look = { roof: number[] | null; wall: number[] | null; style: number; bare?: 1 | 2 | 3 };
+ * structures whose footprint is only a bounding box); 4 = as 3, and level tops plain (no flat-roof sheets: graves) */
+export type Look = { roof: number[] | null; wall: number[] | null; style: number; bare?: 1 | 2 | 3 | 4 };
 export type Piece = { roof: number[]; wall: number[]; footprint: P2[]; height: number; base: number; look: Look };
 
 export const CLAD = 4; // façade style: cladding lines, no windows, no rooftop clutter

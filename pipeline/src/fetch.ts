@@ -21,6 +21,7 @@
  * data/raw/<area>/ground.json            OSM ground surface: roads/paths, landuse, parks, water,
  *                                        coastline, rail (bbox + margin, drawn onto the terrain)
  * data/raw/dem/*.tif                     Copernicus GLO-30 elevation (1°×1° tiles, AWS open data)
+ * data/raw/<area>/alkis-parcels.json         LGL ALKIS parcels (regions with sources "lgl"; alkis.ts)
  * data/raw/lgl/{dgm1,ndom1,lod2}/*.zip    LGL Baden-Württemberg terrain, surface heights, LoD2 buildings
  *                                        (regions with sources "lgl"; see lgl.ts)
  * data/raw/gugik/                        GUGiK LoD2, LoD1 2024, BDOT10k (per powiat), NMT and NMPT sheets
@@ -36,6 +37,7 @@ import { join } from "node:path";
 import { openArea } from "./areas.ts";
 import { LOOKS, REBUILDS, STRUCTURES, TOWERS } from "./landmarks.ts";
 import { download } from "./lgl.ts";
+import { fetchParcels } from "./alkis.ts";
 import { fetchGugik } from "./gugik.ts";
 import { FILTERS, downloadExtract, localOsm, type OsmFilter } from "./osmlocal.ts";
 import { overpass } from "./overpass.ts";
@@ -114,6 +116,7 @@ if (sources === "lgl") {
   await download("lod2", [s - m, w - m, n + m, e + m]);
   await download("ndom1", [s - m, w - m, n + m, e + m]);
   await download("dgm1", [s - g, w - g, n + g, e + g]);
+  await fetchParcels(name, [s - m, w - m, n + m, e + m]); // ALKIS property lines (preset gardens)
 }
 if (sources === "gugik") await fetchGugik(REGIONS[area.region].teryt ?? [], area.bbox);
 if (sources === "zg3d") await downloadZg3d();

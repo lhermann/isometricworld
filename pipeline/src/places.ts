@@ -212,7 +212,7 @@ export const REGIONS: Record<string, Region> = {
     pigeons: [[48.7784, 9.17978], [48.7752, 9.17843], [48.77663, 9.1811], [48.80345, 9.21697]],
     credits: [
       "Map data © OpenStreetMap contributors · Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (verändert)",
-      "Buildings: LGL LoD2 · Terrain: LGL DGM1, Copernicus DEM © DLR, Airbus DS · Trees: LGL nDOM1",
+      "Buildings: LGL LoD2 · Terrain: LGL DGM1, Copernicus DEM © DLR, Airbus DS · Trees: LGL nDOM1 · Parcels: LGL ALKIS",
       "Luftbilder: Landeshauptstadt Stuttgart, Stadtmessungsamt, CC BY 4.0; LGL DOP20 (verändert) · Centre painted with AI",
       // reference photos of the painted landmarks (ATTRIBUTION.md): the CC BY authors are named
       "Landmarks painted after Wikimedia Commons photos by J. Herzog, A. Praefcke, F. König, Enslin et al. (CC BY; verändert)",

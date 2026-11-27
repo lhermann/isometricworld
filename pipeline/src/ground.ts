@@ -26,6 +26,7 @@ import { fromPuwg, gugikTerrain, orthoChunks, toPuwg } from "./gugik.ts";
 import { lawns } from "./lawns.ts";
 import { playLayout } from "./playgrounds.ts";
 import { parkLayout } from "./parking.ts";
+import { courtLayout } from "../page/ground.ts";
 import { lod2Files, rasterSampler, toUtm } from "./lgl.ts";
 import { parseLod2 } from "./lod2.ts";
 import { DERIVED, RAW, readJson } from "./paths.ts";
@@ -33,6 +34,10 @@ import { REGIONS } from "./places.ts";
 import { ROAD, isOneway, roadWidth } from "./roadspec.ts";
 import { styleOf } from "./styles.ts";
 import { zg3dBases } from "./zg3d.ts";
+import { parcelsFile } from "./alkis.ts";
+import { gardenLines } from "./gardens.ts";
+import { allotmentLayout } from "./allotments.ts";
+import { screenLines } from "./courts.ts";
 
 type P2 = [number, number];
 const MARGIN = 0.02;
@@ -45,7 +50,7 @@ const R_EARTH = 6371000;
 /** p: the street's pavements (bit 1 left, 2 right of its direction; unset both), u: the surface (surfaceOf), both
  *  only with the preset's `streetDetail`; s: a track line's surface kind (trackKind); ref: a runway's designators;
  *  sh: a sheltered platform */
-export interface Feature { k: string; r?: P2[][]; l?: P2[]; w?: number; o?: 1; n?: number; y?: number; j?: number[][]; v?: number; b?: 1; e?: number[]; s?: string; p?: number; u?: string; ref?: string; sh?: 1 }
+export interface Feature { k: string; r?: P2[][]; l?: P2[]; w?: number; o?: 1; n?: number; y?: number; j?: number[][]; v?: number; b?: 1; e?: number[]; s?: string; p?: number; u?: string; ref?: string; sh?: 1; g?: number[] }
 
 const name = process.argv[2] ?? "tlv-core";
 const area = openArea(name);
@@ -61,8 +66,12 @@ const LAWNS = STYLED && styleOf(region.style).lawns && region.sources === "gugik
 /** Preset `waterDetail`: watercourses as lines, treatment basins murky, dry (intermittent) reservoirs a grassy
  *  basin (page/ground.ts draws the water's depth). */
 const WATER_DETAIL = STYLED && styleOf(region.style).waterDetail;
-/** Preset `pitchMarkings`: football pitches carry v: 1 (page/ground.ts marks them out). */
+/** Preset `pitchMarkings`: football pitches carry v: 1, tennis courts v: 2 and their surface (page/ground.ts marks them out). */
 const PITCH_MARKINGS = STYLED && styleOf(region.style).pitchMarkings;
+/** Preset `graves`: cemeteries carry g = their graves (page/ground.ts draws them). */
+const GRAVES = STYLED && styleOf(region.style).graves;
+/** House gardens: hedges and fences on the ALKIS property lines (gardens.ts). */
+const GARDENS = STYLED && styleOf(region.style).gardens && region.sources === "lgl";
 /** Preset `closedLines`: closed roads and paths (one-way roundabouts, loops) simplified as rings, not collapsed. */
 const CLOSED_LINES = STYLED && styleOf(region.style).closedLines;
 /** preset repaint: rail yards and platforms beside open-air track (page/ground.ts draws them) */
@@ -357,7 +366,8 @@ for (const el of osm.elements) {
   const r = rings.map((q) => simplifyRing(q, 0.3)).filter((q) => q.length >= 4);
   if (!r.length) continue;
   features.push(k === "farm" || k === "meadow" ? { k, r, v: fieldShade(t, el.id) }
-    : k === "pitch" && PITCH_MARKINGS && t.leisure === "pitch" && /(^|;)\s*soccer\s*(;|$)/.test(t.sport ?? "") ? { k, r, v: 1 } : { k, r });
+    : k === "pitch" && PITCH_MARKINGS && t.leisure === "pitch" && /(^|;)\s*soccer\s*(;|$)/.test(t.sport ?? "") ? { k, r, v: 1 }
+    : k === "pitch" && PITCH_MARKINGS && t.leisure === "pitch" && /(^|;)\s*tennis\s*(;|$)/.test(t.sport ?? "") ? { k, r, v: 2, ...(t.surface ? { s: t.surface } : {}), g: courtLayout(r).map((x) => Math.round(x * 1000) / 1000) } : { k, r });
   if (k === "water" || k === "wastewater") water.push({ r, river: /^(river|canal|stream|rapids)$/.test(t.water ?? "") || t.waterway === "riverbank" });
 }
 
@@ -406,6 +416,115 @@ if (main) {
   sea = [simplifyLine(ring, 0.3), ...chains.filter(closed).map((c) => simplifyRing(c, 0.3))]; // closed = islands/breakwaters
   features.unshift({ k: "sea", r: sea });
   features.push({ k: "shore", l: simplifyLine(main, 0.3) });
+}
+if (GRAVES) {
+  // Graves, laid out per field like a real cemetery (learned from an AI painting of the Pragfriedhof): the cemetery on
+  // a 0.5 m raster minus its paths, roads and water with a lawn margin, split into fields; each field's rows follow the
+  // paths along its own edges; a grave only where all of it is free. f.g = [x, y, angle, head side, …] per grave.
+  // drawn 1.6× life size (as the AI paints them: at true size a grave is 2–3 px and the rows blur into hatching)
+  const R = 0.5, MARGIN = 1.0, GW = 1.6, GL = 3.7, PU = 2.2, AISLE = 1.4;
+  const ways = features.filter((f) => f.l && /^(path|plaza|lane|dirtroad|sidewalk|street|highway|cycle|rail|grassway)$/.test(f.k));
+  const wet = features.filter((f) => f.r && /^(water|pool)$/.test(f.k));
+  let nCem = 0, nGraves = 0;
+  for (const f of features) {
+    if (f.k !== "cemetery") continue;
+    const rings = f.r!;
+    let [bx0, by0, bx1, by1] = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const [x, y] of rings[0]) { bx0 = Math.min(bx0, x); by0 = Math.min(by0, y); bx1 = Math.max(bx1, x); by1 = Math.max(by1, y); }
+    const W = Math.ceil((bx1 - bx0) / R) + 1, H = Math.ceil((by1 - by0) / R) + 1;
+    if (W * H > 3e7 || W < 4 || H < 4) continue;
+    const free = new Uint8Array(W * H), ang = new Float32Array(W * H).fill(NaN);
+    // inside the rings (even-odd), by scanline
+    const fillRings = (rs: P2[][], v: number) => {
+      for (let j = 0; j < H; j++) {
+        const y = by0 + (j + 0.5) * R, xs: number[] = [];
+        for (const r of rs) for (let i = 0, k = r.length - 1; i < r.length; k = i++) {
+          const [xi, yi] = r[i], [xk, yk] = r[k];
+          if (yi > y !== yk > y) xs.push(xi + ((y - yi) * (xk - xi)) / (yk - yi));
+        }
+        xs.sort((p, q) => p - q);
+        for (let q = 0; q + 1 < xs.length; q += 2) {
+          const c0 = Math.max(0, Math.ceil((xs[q] - bx0) / R - 0.5)), c1 = Math.min(W - 1, Math.floor((xs[q + 1] - bx0) / R - 0.5));
+          for (let c = c0; c <= c1; c++) free[j * W + c] = v;
+        }
+      }
+    };
+    fillRings(rings, 1);
+    for (const w of wet) fillRings(w.r!, 0);
+    // a segment clears a band (half its width + margin) and marks its direction just beyond, for the fields' angles
+    const stamp = (a: P2, b: P2, clear: number, weightBand: boolean) => {
+      const reach = clear + (weightBand ? 2 : 0), deg = ((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI % 90 + 90) % 90;
+      const c0 = Math.max(0, Math.floor((Math.min(a[0], b[0]) - reach - bx0) / R)), c1 = Math.min(W - 1, Math.ceil((Math.max(a[0], b[0]) + reach - bx0) / R));
+      const r0 = Math.max(0, Math.floor((Math.min(a[1], b[1]) - reach - by0) / R)), r1_ = Math.min(H - 1, Math.ceil((Math.max(a[1], b[1]) + reach - by0) / R));
+      const dx = b[0] - a[0], dy = b[1] - a[1], L2 = dx * dx + dy * dy || 1;
+      for (let j = r0; j <= r1_; j++) for (let c = c0; c <= c1; c++) {
+        const x = bx0 + (c + 0.5) * R, y = by0 + (j + 0.5) * R;
+        const u = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / L2)), d = Math.hypot(x - a[0] - u * dx, y - a[1] - u * dy);
+        if (d < clear) free[j * W + c] = 0;
+        else if (weightBand && d < reach && free[j * W + c]) ang[j * W + c] = deg;
+      }
+    };
+    for (const r of rings) for (let i = 1; i < r.length; i++) stamp(r[i - 1], r[i], MARGIN, true);
+    for (const w of ways) {
+      const l = w.l!, half = (w.w ?? (w.k === "rail" ? 3 : 2)) / 2;
+      let wx0 = Infinity, wy0 = Infinity, wx1 = -Infinity, wy1 = -Infinity;
+      for (const [x, y] of l) { wx0 = Math.min(wx0, x); wy0 = Math.min(wy0, y); wx1 = Math.max(wx1, x); wy1 = Math.max(wy1, y); }
+      if (wx1 < bx0 - 10 || wx0 > bx1 + 10 || wy1 < by0 - 10 || wy0 > by1 + 10) continue;
+      for (let i = 1; i < l.length; i++) stamp(l[i - 1], l[i], half + MARGIN, true);
+    }
+    // fields: 4-connected parts of the free raster
+    const label = new Int32Array(W * H).fill(-1), graves: number[] = [];
+    for (let s0 = 0; s0 < W * H; s0++) {
+      if (!free[s0] || label[s0] >= 0) continue;
+      const cells: number[] = [s0], hist = new Float64Array(90);
+      label[s0] = s0;
+      for (let q = 0; q < cells.length; q++) {
+        const s = cells[q], c = s % W, j = (s - c) / W;
+        if (!Number.isNaN(ang[s])) hist[Math.floor(ang[s]) % 90]++;
+        for (const n of [c > 0 ? s - 1 : -1, c < W - 1 ? s + 1 : -1, j > 0 ? s - W : -1, j < H - 1 ? s + W : -1])
+          if (n >= 0 && free[n] && label[n] < 0) { label[n] = s0; cells.push(n); }
+      }
+      if (cells.length * R * R < 15) continue; // a scrap of lawn
+      let best = 0, bestW = -1;
+      for (let d = 0; d < 90; d++) { let sum = 0; for (let k = -2; k <= 2; k++) sum += hist[(d + k + 90) % 90] * (3 - Math.abs(k)); if (sum > bestW) { bestW = sum; best = d; } }
+      let sw = 0, sa = 0;
+      for (let k = -2; k <= 2; k++) { const h = hist[(best + k + 90) % 90]; sw += h; sa += h * (best + k); }
+      const deg = ((sw ? sa / sw : best) + 90) % 90;
+      // rows along the field's longer side: try both axes, keep the one that holds more graves
+      let bestSet: number[] = [];
+      for (const rot of [0, 90]) {
+        const a = ((deg + rot) * Math.PI) / 180, cu = Math.cos(a), su = Math.sin(a);
+        let u0 = Infinity, u1 = -Infinity, w0 = Infinity, w1 = -Infinity;
+        for (const s of cells) {
+          const c = s % W, j = (s - c) / W, x = bx0 + (c + 0.5) * R, y = by0 + (j + 0.5) * R;
+          const u = x * cu + y * su, w = -x * su + y * cu;
+          u0 = Math.min(u0, u); u1 = Math.max(u1, u); w0 = Math.min(w0, w); w1 = Math.max(w1, w);
+        }
+        const ok = (x: number, y: number) => {
+          const c = Math.floor((x - bx0) / R), j = Math.floor((y - by0) / R);
+          return c >= 0 && j >= 0 && c < W && j < H && label[j * W + c] === s0;
+        };
+        const set: number[] = [];
+        // row pairs head to head (headstones meet in the middle), an aisle between pairs
+        for (let w = w0; w + 2 * GL <= w1 + 0.01; w += 2 * GL + AISLE) for (const side of [0, 1]) {
+          const wc = w + GL / 2 + side * GL;
+          for (let u = u0; u + GW <= u1 + 0.01; u += PU) {
+            const uc = u + GW / 2;
+            let fits = true;
+            for (const [du, dw] of [[-GW / 2, -GL / 2], [GW / 2, -GL / 2], [-GW / 2, GL / 2], [GW / 2, GL / 2], [0, 0]]) {
+              const U = uc + du, Wv = wc + dw;
+              if (!ok(U * cu - Wv * su, U * su + Wv * cu)) { fits = false; break; }
+            }
+            if (fits) set.push(r1(uc * cu - wc * su), r1(uc * su + wc * cu), Math.round(((deg + rot) % 180) * 10) / 10, side);
+          }
+        }
+        if (set.length > bestSet.length) bestSet = set;
+      }
+      graves.push(...bestSet);
+    }
+    if (graves.length) { f.g = graves; nCem++; nGraves += graves.length / 4; }
+  }
+  console.log(`  graves: ${nGraves} in ${nCem} cemeteries`);
 }
 console.log(`  features: ${features.length} (${chains.length} coastline chains)`);
 
@@ -798,6 +917,30 @@ if (LAWNS) {
   const blocks = await lawns(orthoChunks(box), pbox, (e, n) => { const [la, lo] = fromPuwg(e, n), [x, y] = toEnu(lo, la); return [r1(x), r1(y)]; });
   for (const r of blocks) features.push({ k: "lawn", r });
   console.log(`  lawns: ${blocks.length} blocks, ${blocks.reduce((a, b) => a + b.length, 0)} outlines from the orthophoto`);
+}
+// tennis courts: windscreens round each group of courts (courts.ts; 3D in scene.ts)
+if (PITCH_MARKINGS) {
+  const s = screenLines(features.filter((f) => f.k === "pitch" && f.v === 2).map((f) => f.r![0]));
+  features.push(...s);
+  console.log(`  tennis windscreens: ${s.length}`);
+}
+// house gardens: hedges and fences along the property lines of the parcels dwellings stand on (gardens.ts)
+if (GARDENS) {
+  const dwellings: Array<{ fp: P2[]; fn: string }> = [];
+  for (const f of lod2Files(area.bbox)) for (const b of parseLod2(f.xml, area.bbox, region.geoidM)) dwellings.push({ fp: b.footprint, fn: b.fn });
+  // allotments plot by plot (allotments.ts)
+  const lots = allotmentLayout(features, dwellings.map((d) => d.fp));
+  for (const f of lots) features.push(f);
+  console.log(`  allotments: ${lots.filter((f) => f.k === "beds").length} plots, ${lots.filter((f) => f.k === "shed").length} sheds`);
+}
+if (GARDENS && existsSync(parcelsFile(name))) {
+  const dwellings: Array<{ fp: P2[]; fn: string }> = [];
+  for (const f of lod2Files(area.bbox)) for (const b of parseLod2(f.xml, area.bbox, region.geoidM)) dwellings.push({ fp: b.footprint, fn: b.fn });
+  const cs = [[S, W], [S, E], [N, W], [N, E]].map(([la, lo]) => toEnu(lo, la));
+  const box = [Math.min(...cs.map((c) => c[0])), Math.min(...cs.map((c) => c[1])), Math.max(...cs.map((c) => c[0])), Math.max(...cs.map((c) => c[1]))];
+  const lines = gardenLines(readJson(parcelsFile(name)).parcels, dwellings, features, toEnu, box);
+  for (const f of lines) features.push(f);
+  console.log(`  gardens: ${lines.filter((f) => f.k === "hedge").length} hedges, ${lines.filter((f) => f.k === "fence").length} fences`);
 }
 writeFileSync(join(out, "features.json"), JSON.stringify(features));
 let lo = Infinity, hi = -Infinity;

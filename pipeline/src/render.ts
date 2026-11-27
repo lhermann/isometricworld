@@ -54,7 +54,7 @@ const COPERNICUS = "Copernicus DEM GLO-30 © DLR e.V. 2010-2014 and © Airbus De
 /** Sources of the render manifest, per region data source (places.ts `sources`). */
 const SOURCE: Record<string, string> = {
   tlv: "Tel Aviv-Yafo Municipality open data",
-  lgl: "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (LoD2, DGM1, nDOM1; verändert)",
+  lgl: "Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 (LoD2, DGM1, nDOM1, ALKIS; verändert)",
   zg3d: "Grad Zagreb, ZG3D 2022, data.zagreb.hr (Otvorena dozvola; izmijenjeno)",
   gugik: "Opracowano na podstawie materiałów państwowego zasobu geodezyjnego i kartograficznego (GUGiK: modele 3D budynków LoD1/LoD2, BDOT10k, NMT, NMPT, ortofotomapa)",
 };

@@ -1,0 +1,3 @@
+This is a map of the city block behind Stuttgart's Schlossplatz. Near the top left stands a glass cube with a stone cube inside it (the art museum).
+- KEEP, pixel for pixel exactly as it is: only the glass cube museum itself, with the stone cube inside it, its walls down to the ground and its roof.
+- REPLACE everything else with one flat solid pure magenta colour #FF00FF: the plaza and paving around the cube, the trees and planters next to it, the steps, every other building, the square with its lawns, every street and every car.

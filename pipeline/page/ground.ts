@@ -11,7 +11,7 @@ type P2 = [number, number];
 /** b: a bridge with its own deck (bridges.ts): drawn on the deck canvas, not the ground */
 /** p, u: pavement sides and surface (src/ground.ts, preset streetDetail); s: a track line's surface kind; ref: a
  *  runway's designators; sh: a sheltered platform */
-export interface Feature { k: string; r?: P2[][]; l?: P2[]; w?: number; o?: 1; n?: number; y?: number; j?: number[][]; v?: number; b?: 1; e?: number[]; s?: string; p?: number; u?: string; ref?: string; sh?: 1 }
+export interface Feature { k: string; r?: P2[][]; l?: P2[]; w?: number; o?: 1; n?: number; y?: number; j?: number[][]; v?: number; b?: 1; e?: number[]; s?: string; p?: number; u?: string; ref?: string; sh?: 1; g?: number[] }
 interface Objects { b: Array<[P2[], number, number, number | null]>; t: Array<[number, number, number, number, number?]> }
 
 const FILL: Record<string, string> = {
@@ -140,6 +140,8 @@ export function drawGround(
   detailBridges = false, // preset bridgeDetail: on the deck canvas, a concrete cornice band instead of painted parapets
   water = false, // preset waterDetail: depth, banks, ripples; watercourses
   styled = false, // preset repaintGround: the ground as the AI repaints draw it (greens, ink kerbs, runways, gravel beds…)
+  pathInk = false, // preset pathInk: paths outlined in ink with an inner shadow, like the kerbs
+  treeShadow: { alpha: number; blur: number } | null = null, // preset treeShadow: strong tree shadows over paths and streets
 ) {
   const CORNICE = "#cbc6bd";
   const SHADOW_DIR = shadowDir;
@@ -188,6 +190,19 @@ export function drawGround(
     ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(s, 0, 0); ctx.restore();
   };
   const of = (k: string) => features.filter((f) => f.k === k);
+  /** preset pathInk on an area (parking lots): an inner shadow along the sun-facing edge and an ink line, as the paths get */
+  const inkedEdge = (rings: P2[][]) => {
+    const ring = (dx: number, dy: number) => { for (const q of rings) q.forEach(([x, y], i) => (i ? ctx.lineTo(x + dx, y + dy) : ctx.moveTo(x + dx, y + dy))); };
+    ctx.save();
+    ctx.beginPath(); ring(0, 0); ctx.clip("evenodd");
+    // what lies outside, shifted down-sun and blurred, kept inside
+    ctx.beginPath(); ctx.rect(x0 - 100, y0 - 100, x1 - x0 + 200, y1 - y0 + 200); ring(SHADOW_DIR[0] * 0.7, SHADOW_DIR[1] * 0.7);
+    ctx.filter = `blur(${0.25 / mpt}px)`; ctx.fillStyle = "rgba(20,22,30,0.45)"; ctx.fill("evenodd"); ctx.filter = "none";
+    ctx.restore();
+    ctx.save(); ctx.beginPath(); ring(0, 0); ctx.closePath();
+    ctx.globalAlpha = 0.6; ctx.lineWidth = 0.3; ctx.lineJoin = "round"; ctx.strokeStyle = INK; ctx.setLineDash([]); ctx.stroke();
+    ctx.restore();
+  };
   const inView = (p: number[]) => p[0] > x0 - 50 && p[0] < x1 + 50 && p[1] > y0 - 50 && p[1] < y1 + 50;
   const junctions = (of("junctions")[0]?.j ?? []).filter(inView);
   const zebras = (of("zebras")[0]?.j ?? []).filter(inView);
@@ -211,7 +226,7 @@ export function drawGround(
   for (const f of areas) {
     const k = f.k;
     if (!streams && (k === "water" || k === "wastewater" || k === "pool")) drawStreams();
-    path(f.r!); ctx.fillStyle = k === "playpad" ? PADS[f.v ?? 0] : water && k === "water" ? "#3786b5" : (k === "farm" || k === "meadow") && f.v !== undefined ? FIELD[f.v] ?? FILL_[k] : FILL_[k];
+    path(f.r!); ctx.fillStyle = k === "playpad" ? PADS[f.v ?? 0] : water && k === "water" ? "#3786b5" : (k === "farm" || k === "meadow") && f.v !== undefined ? FIELD[f.v] ?? FILL_[k] : k === "cemetery" && f.g ? GRAVE_LAWN : k === "parking" && styled && pathInk ? "#a3a29f" : FILL_[k]; // pathInk: lots as mid-grey asphalt, so the stall lines read
     if (k === "railyard" && styled) ctx.fillStyle = yardGravel ??= gravelPattern(mpt, "#c2bcb0", "#aaa499", "#d4cfc4"); // lighter than the beds
     ctx.fill("evenodd");
     if (k === "construction" && sites) { // the site's plan (sites.ts): earth patches, pads, pits, haul roads; a fence round it
@@ -281,6 +296,7 @@ export function drawGround(
       ctx.fillRect(ax, ay, Math.min(bx1, x1) - ax, Math.min(by1, y1) - ay);
       ctx.restore();
     }
+    if (k === "cemetery" && f.g) { ctx.save(); ctx.clip("evenodd"); graves(ctx, f.g, [x0, y0, x1, y1], shadowDir); ctx.restore(); }
     if (k === "flowerbed") { // blossoms: a deterministic speckle every ~1 m
       ctx.save(); ctx.clip("evenodd");
       const [bx0, by0, bx1, by1] = bounds(f.r!);
@@ -293,7 +309,9 @@ export function drawGround(
       ctx.restore();
     }
     if (k === "pitch" && f.v === 1) { ctx.save(); ctx.clip("evenodd"); pitchMarks(ctx, f.r![0]); ctx.restore(); }
+    else if (k === "pitch" && f.v === 2) { ctx.save(); ctx.clip("evenodd"); tennisMarks(ctx, f.r!, f.s, f.g ?? courtLayout(f.r!), SHADOW_DIR); ctx.restore(); }
     else if (k === "pitch") { ctx.lineWidth = 0.25; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke(); }
+    if ((k === "parking" || k === "pitch") && styled && pathInk) inkedEdge(f.r!); // lots, pitches and courts: ink and inner shadow
     if (k === "vineyard") {   // vine rows ~2 m apart, up and down the slope (drawn north-south: most Stuttgart slopes face south)
       ctx.save(); ctx.clip("evenodd");
       const [bx0, by0, bx1, by1] = bounds(f.r!);
@@ -302,7 +320,7 @@ export function drawGround(
       for (let x = Math.floor(bx0 / 2) * 2; x < bx1; x += 2) { ctx.moveTo(x, by0); ctx.lineTo(x, by1); }
       ctx.stroke(); ctx.restore();
     }
-    if (k === "allotments") { // garden plots: a loose grid of hedges
+    if (k === "allotments" && f.v !== 1) { // garden plots: a loose grid of hedges (laid out plot by plot: allotments.ts)
       ctx.save(); ctx.clip("evenodd");
       const [bx0, by0, bx1, by1] = bounds(f.r!);
       ctx.lineWidth = 0.5; ctx.strokeStyle = "#7f9e52"; ctx.setLineDash([]);
@@ -450,7 +468,7 @@ export function drawGround(
     ctx.closePath();
     ctx.fill("nonzero");
   }
-  for (const [x, y, r, ch] of objects.t) {
+  if (!treeShadow) for (const [x, y, r, ch] of objects.t) {
     const L = Math.min(6, ch * 0.3);
     ctx.beginPath(); ctx.arc(x + SHADOW_DIR[0] * L, y + SHADOW_DIR[1] * L, r * 0.95, 0, Math.PI * 2); ctx.fill();
   }
@@ -459,13 +477,30 @@ export function drawGround(
 
   if (!streams) drawStreams(); // no lake in this tile
   // parking stall lines (preset parkedCars)
-  for (const f of of("stalls")) { path(f.r!); ctx.lineWidth = 0.12; ctx.strokeStyle = "rgba(255,255,255,0.75)"; ctx.setLineDash([]); ctx.stroke(); }
+  for (const f of of("stalls")) { // preset pathInk: crisp (0.12 m lines vanish at the render's scale)
+    path(f.r!); ctx.lineWidth = styled && pathInk ? 0.22 : 0.12; ctx.strokeStyle = styled && pathInk ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.75)"; ctx.setLineDash([]); ctx.stroke();
+  }
   // 4. paths and plazas, then pavements under streets
   if (detailBridges) for (const f of [...of("path"), ...of("cycle"), ...of("sidewalk")]) stroke(f.l!, f.w! + 2.2, CORNICE);
   // styled (preset repaintGround): inside corners where paths meet rounded
-  for (const k of ["path", "plaza", "cycle"]) fillet(FILLET.path, (g) => {
-    for (const f of of(k)) stroke(f.l!, f.w! + 2 * g, (f.u && PATH_SURFACE[f.u]) || (detailBridges && f.k !== "plaza" ? "#b8b7b3" : PATHS[f.k]));
-  });
+  for (const k of ["path", "plaza", "cycle"]) {
+    const draw = (g: number) => { for (const f of of(k)) stroke(f.l!, f.w! + 2 * g, (f.u && PATH_SURFACE[f.u]) || (detailBridges && f.k !== "plaza" ? "#b8b7b3" : PATHS[f.k])); };
+    if (!(styled && pathInk) || !of(k).length) { fillet(FILLET.path, draw); continue; }
+    // preset pathInk: an ink line round the path (its shape grown by 1 px), then the path, then a shadow along the
+    // edge facing the sun (what lies outside, shifted down-sun and blurred, kept on the path), as on the streets
+    const ink = scratch("pathInk"); ink.drawImage(shapeOf(FILLET.path, (g) => draw(g + 0.25)), 0, 0); // 0.25 m, softened ink: a light line, not a kerb
+    ink.globalCompositeOperation = "source-in"; ink.fillStyle = INK; ink.fillRect(0, 0, W, H);
+    ctx.save(); ctx.globalAlpha = 0.6; ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(canvases.pathInk, 0, 0); ctx.restore();
+    const shape = scratch("pathShape"); shape.drawImage(shapeOf(FILLET.path, draw), 0, 0);
+    const sh = scratch("pathShadow");
+    sh.fillStyle = "rgba(20,22,30,0.45)"; sh.fillRect(0, 0, W, H);
+    sh.globalCompositeOperation = "destination-out"; sh.filter = `blur(${0.25 / mpt}px)`;
+    sh.drawImage(canvases.pathShape, (SHADOW_DIR[0] * 0.7) / mpt, (-SHADOW_DIR[1] * 0.7) / mpt);
+    sh.filter = "none"; sh.globalCompositeOperation = "destination-in"; sh.drawImage(canvases.pathShape, 0, 0);
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(canvases.pathShape, 0, 0); ctx.drawImage(canvases.pathShadow, 0, 0);
+    ctx.restore();
+  }
   // pavements OSM maps as their own ways: a kerbed strip
   for (const f of of("sidewalk")) stroke(f.l!, f.w! + 0.3, KERB);
   for (const f of of("sidewalk")) stroke(f.l!, f.w!, (f.u && PATH_SURFACE[f.u]) || SIDEWALK);
@@ -647,6 +682,77 @@ export function drawGround(
   }
 
   ctx.setLineDash([]);
+  // preset gardens: allotment beds (allotments.ts), bare earth with rows of greens on most, and the sheds' shadows
+  {
+    const beds = [new Path2D(), new Path2D(), new Path2D()], rows = new Path2D(); // bare earth, dark earth, greens
+    for (const f of features) {
+      if (f.k !== "beds" || !f.r) continue;
+      const [ax, ay] = f.r[0][0];
+      if (ax < x0 - 20 || ax > x1 + 20 || ay < y0 - 20 || ay > y1 + 20) continue;
+      for (const r of f.r) {
+        const h0 = Math.sin(r[0][0] * 12.9898 + r[0][1] * 78.233) * 43758.5453, h = h0 - Math.floor(h0), b = h < 0.35 ? 0 : h < 0.65 ? 1 : 2;
+        beds[b].moveTo(r[0][0], r[0][1]); for (const p of r.slice(1)) beds[b].lineTo(p[0], p[1]); beds[b].closePath();
+        if (b === 2 || h < 0.12) continue; // greens and fallow: no rows
+        for (const t of [0.3, 0.7]) { // two rows of plants along the bed
+          const a = [r[0][0] + (r[3][0] - r[0][0]) * t, r[0][1] + (r[3][1] - r[0][1]) * t], c = [r[1][0] + (r[2][0] - r[1][0]) * t, r[1][1] + (r[2][1] - r[1][1]) * t];
+          rows.moveTo(a[0], a[1]); rows.lineTo(c[0], c[1]);
+        }
+      }
+    }
+    for (const [i, c] of ["#a98559", "#87664a", "#6f9a42"].entries()) { ctx.fillStyle = c; ctx.fill(beds[i]); }
+    ctx.lineWidth = 0.35; ctx.lineCap = "butt"; ctx.setLineDash([0.45, 0.25]); ctx.strokeStyle = "#5f8a38"; ctx.stroke(rows); ctx.setLineDash([]); ctx.lineCap = "round";
+    ctx.lineWidth = 0.15; ctx.strokeStyle = "rgba(70,50,30,0.5)"; for (const b of beds) ctx.stroke(b);
+    const sh = new Path2D();
+    for (const f of features) {
+      if (f.k !== "shed" || !f.r) continue;
+      const r = f.r[0], L = (f.w ?? 2.2) * NET_SHADOW;
+      if (r[0][0] < x0 - 10 || r[0][0] > x1 + 10 || r[0][1] < y0 - 10 || r[0][1] > y1 + 10) continue;
+      for (let i = 0; i < r.length; i++) {
+        const p = r[i], q = r[(i + 1) % r.length];
+        sh.moveTo(p[0], p[1]); sh.lineTo(q[0], q[1]); sh.lineTo(q[0] + SHADOW_DIR[0] * L, q[1] + SHADOW_DIR[1] * L); sh.lineTo(p[0] + SHADOW_DIR[0] * L, p[1] + SHADOW_DIR[1] * L); sh.closePath();
+      }
+    }
+    ctx.fillStyle = "rgba(25,32,18,0.42)"; ctx.fill(sh, "nonzero");
+  }
+  // preset gardens: hedges' and fences' shadows (and pitchMarkings: the tennis windscreens') (gardens.ts; the hedges themselves are 3D), each swept down-sun by its
+  // height; a fence's lighter, the sun comes through it
+  for (const [kind, alpha] of [["hedge", 0.42], ["fence", 0.22], ["screen", 0.4]] as const) {
+    const sh = new Path2D();
+    for (const f of features) {
+      if (f.k !== kind || !f.l) continue;
+      const L = (f.w ?? 1.2) * NET_SHADOW, half = kind === "hedge" ? 0.4 : kind === "screen" ? 0.1 : 0.08;
+      for (let i = 1; i < f.l.length; i++) {
+        const a = f.l[i - 1], b = f.l[i], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len < 0.1 || Math.max(a[0], b[0]) < x0 - 5 || Math.min(a[0], b[0]) > x1 + 5 || Math.max(a[1], b[1]) < y0 - 5 || Math.min(a[1], b[1]) > y1 + 5) continue;
+        const nx = (-(b[1] - a[1]) / len) * half, ny = ((b[0] - a[0]) / len) * half;
+        for (const s of [-1, 1]) {
+          const p = [a[0] + s * nx, a[1] + s * ny], q = [b[0] + s * nx, b[1] + s * ny];
+          sh.moveTo(p[0], p[1]); sh.lineTo(q[0], q[1]); sh.lineTo(q[0] + SHADOW_DIR[0] * L, q[1] + SHADOW_DIR[1] * L); sh.lineTo(p[0] + SHADOW_DIR[0] * L, p[1] + SHADOW_DIR[1] * L); sh.closePath();
+        }
+      }
+    }
+    ctx.fillStyle = `rgba(25,32,18,${alpha})`; ctx.fill(sh, "nonzero");
+  }
+  // the fences themselves: a thin weathered line (posts and rails are below a pixel)
+  ctx.beginPath();
+  for (const f of features) if (f.k === "fence" && f.l) { ctx.moveTo(f.l[0][0], f.l[0][1]); for (const p of f.l.slice(1)) ctx.lineTo(p[0], p[1]); }
+  ctx.lineWidth = 0.3; ctx.lineCap = "butt"; ctx.strokeStyle = "rgba(92,86,74,0.75)"; ctx.stroke(); ctx.lineCap = "round";
+  // preset treeShadow: crowns' shadows over everything on the ground, one shape (overlaps don't darken twice), each
+  // circle reaching back to its trunk's foot (a shadow cast true to the sun floats off on its own and reads as a stain),
+  // softly blurred
+  if (treeShadow) {
+    ctx.beginPath();
+    for (const [x, y, r] of objects.t) {
+      const R = r * 1.15, cx = x + SHADOW_DIR[0] * R, cy = y + SHADOW_DIR[1] * R;
+      if (cx + R < x0 - 15 || cx - R > x1 + 15 || cy + R < y0 - 15 || cy - R > y1 + 15) continue;
+      ctx.moveTo(cx + R, cy); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    }
+    ctx.save();
+    ctx.filter = `blur(${treeShadow.blur / mpt}px)`;
+    ctx.fillStyle = `rgba(30,38,20,${treeShadow.alpha})`; ctx.fill("nonzero");
+    ctx.restore();
+  }
+
 }
 
 const CLASS = ["dirtroad", "lane", "street", "highway"];
@@ -678,7 +784,7 @@ function offset(l: P2[], d: number): P2[] {
 }
 
 /** The smallest rectangle round a ring (one side on a hull edge): centre, unit long axis, length, width. */
-function fitRect(ring: P2[]) {
+export function fitRect(ring: P2[]) {
   let best: { c: P2; u: P2; L: number; W: number } | null = null, bestA = Infinity;
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i], b = ring[(i + 1) % ring.length], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -693,6 +799,37 @@ function fitRect(ring: P2[]) {
     best = u1 - u0 >= v1 - v0 ? { c, u: [ux, uy], L: u1 - u0, W: v1 - v0 } : { c, u: [-uy, ux], L: v1 - v0, W: u1 - u0 };
   }
   return best;
+}
+
+/** lawn between the graves (the AI painting's warm yellow-green) */
+const GRAVE_LAWN = "#a9c15c";
+/**
+ * Drop shadows of the graves (preset graves; ground.ts lays them out, g = x, y, angle, head side per grave; the graves
+ * themselves are 3D, graves.ts): the low mound casts a short one, the headstone a long one, as strong as the AI
+ * painted them. Each shadow is the footprint swept along the shadow direction, all in one path (no double darkening).
+ * Only graves near this tile are drawn.
+ */
+function graves(ctx: CanvasRenderingContext2D, g: number[], [tx0, ty0, tx1, ty1]: number[], sd: P2) {
+  const S = 1.6, mound = new Path2D(), stone = new Path2D();
+  const sweep = (path: Path2D, pts: P2[], len: number) => {
+    for (let k = 0; k <= 4; k++) {
+      const ox = (sd[0] * len * k) / 4, oy = (sd[1] * len * k) / 4;
+      path.moveTo(pts[0][0] + ox, pts[0][1] + oy);
+      for (let i = 1; i < 4; i++) path.lineTo(pts[i][0] + ox, pts[i][1] + oy);
+      path.closePath();
+    }
+  };
+  for (let q = 0; q < g.length; q += 4) {
+    const x = g[q], y = g[q + 1];
+    if (x < tx0 - 4 || x > tx1 + 4 || y < ty0 - 4 || y > ty1 + 4) continue;
+    const a = (g[q + 2] * Math.PI) / 180, head = g[q + 3] ? -1 : 1, c = Math.cos(a), s = Math.sin(a);
+    const rect = (u0: number, w0: number, u1: number, w1: number): P2[] =>
+      ([[u0, w0], [u1, w0], [u1, w1], [u0, w1]] as P2[]).map(([u, w]) => [x + (u * c - w * s) * S, y + (u * s + w * c) * S]);
+    sweep(mound, rect(-0.48, -1.05, 0.48, 1.05), 0.45);
+    sweep(stone, rect(-0.4, head - 0.1, 0.4, head + 0.1), 2.0);
+  }
+  ctx.fillStyle = "rgba(30,40,15,0.3)"; ctx.fill(mound, "nonzero");
+  ctx.fillStyle = "rgba(30,40,15,0.42)"; ctx.fill(stone, "nonzero");
 }
 
 /**
@@ -736,6 +873,59 @@ function pitchMarks(ctx: CanvasRenderingContext2D, ring: P2[]) {
   }
   ctx.restore();
 }
+
+/** court surfaces (OSM surface=): clay (Germany's default), hard courts, grass and carpet keep the pitch green */
+const COURT: Record<string, string> = { clay: "#c8734f", sand: "#c8734f", hard: "#4f8a72", acrylic: "#4f8a72", asphalt: "#4f8a72", tartan: "#b0604a" };
+
+/**
+ * Tennis courts (preset pitchMarkings; ground.ts tags sport=tennis with v: 2 and the surface): the area in the court
+ * colour, then one court per 36.6 × 18.3 m cell of its tightest rectangle (clubs map a row of courts as one area):
+ * doubles and singles sidelines, baselines, service lines and the centre line in white, the net across in grey.
+ */
+/** Tennis courts on an area's tightest rectangle: one per 36.6 × 18.3 m cell (clubs map a row of courts as one area).
+ *  Per court: centre x, y, axis along the court ux, uy, scale (≤ 1 on small areas). ground.ts stores it (feature g),
+ *  page draws the lines, scene.ts (courts.ts) the nets. */
+export function courtLayout(rings: P2[][]): number[] {
+  const R = fitRect(rings[0]);
+  if (!R || R.W < 8 || R.L < 16) return [];
+  const along = Math.max(1, Math.round(R.L / 36.6)), across = Math.max(1, Math.round(R.W / 18.3));
+  const cl = R.L / along, cw = R.W / across, s = Math.min(1, (cl - 2) / 23.77, (cw - 1) / 10.97), out: number[] = [];
+  for (let i = 0; i < along; i++) for (let j = 0; j < across; j++) {
+    const a = -R.L / 2 + (i + 0.5) * cl, b = -R.W / 2 + (j + 0.5) * cw;
+    out.push(R.c[0] + a * R.u[0] - b * R.u[1], R.c[1] + a * R.u[1] + b * R.u[0], R.u[0], R.u[1], s);
+  }
+  return out;
+}
+
+/**
+ * Tennis courts (preset pitchMarkings; ground.ts tags sport=tennis with v: 2, the surface and the courts, g): the area
+ * in the court colour, then per court the doubles and singles sidelines, baselines, service lines and centre line in
+ * white, and the shadow of the net (the net itself is 3D: courts.ts).
+ */
+function tennisMarks(ctx: CanvasRenderingContext2D, rings: P2[][], surface: string | undefined, courts: number[], sd: P2) {
+  const colour = COURT[surface ?? "clay"] ?? (/grass|turf|carpet/.test(surface ?? "") ? null : COURT.clay);
+  const [bx0, by0, bx1, by1] = bounds(rings);
+  if (colour) { ctx.fillStyle = colour; ctx.fillRect(bx0, by0, bx1 - bx0, by1 - by0); }
+  const shadow = new Path2D();
+  for (let q = 0; q < courts.length; q += 5) {
+    const [cx, cy, ux, uy, s] = courts.slice(q, q + 5), hl = 11.885 * s, dw = 5.485 * s, sw = 4.115 * s, sv = 6.4 * s;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.transform(ux, uy, -uy, ux, 0, 0); // x along the court, y across
+    ctx.beginPath();
+    ctx.rect(-hl, -dw, 2 * hl, 2 * dw);
+    for (const e of [-1, 1]) { ctx.moveTo(-hl, e * sw); ctx.lineTo(hl, e * sw); ctx.moveTo(e * sv, -sw); ctx.lineTo(e * sv, sw); }
+    ctx.moveTo(-sv, 0); ctx.lineTo(sv, 0);
+    ctx.lineWidth = 0.25; ctx.strokeStyle = "rgba(255,255,255,0.95)"; ctx.setLineDash([]); ctx.stroke();
+    ctx.restore();
+    // the net's shadow: the net (1 m, posts 0.9 m beyond the doubles lines) swept down-sun
+    const n = dw + 0.9 * s, L = 1.0 * NET_SHADOW, ax = cx - uy * n, ay = cy + ux * n, bx = cx + uy * n, by = cy - ux * n;
+    shadow.moveTo(ax, ay); shadow.lineTo(bx, by); shadow.lineTo(bx + sd[0] * L, by + sd[1] * L); shadow.lineTo(ax + sd[0] * L, ay + sd[1] * L); shadow.closePath();
+  }
+  ctx.fillStyle = "rgba(25,30,20,0.4)"; ctx.fill(shadow, "nonzero");
+}
+/** shadow length per metre of height (the sun as treeShadow assumes) */
+const NET_SHADOW = 0.9;
 
 function bounds(rings: P2[][]) {
   let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;

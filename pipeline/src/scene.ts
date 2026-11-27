@@ -29,6 +29,10 @@ import { playLayout, playPieces } from "./playgrounds.ts";
 import { parkLayout, parkPieces } from "./parking.ts";
 import { barriers } from "./barriers.ts";
 import { type Road, roofsOnPosts, streetFurniture, streetLamps } from "./props.ts";
+import { graves3d } from "./graves.ts";
+import { nets3d } from "./courts.ts";
+import { hedges3d } from "./gardens.ts";
+import { sheds3d } from "./allotments.ts";
 import { roadWidth } from "./roadspec.ts";
 import { greenery, osmTreeCrown } from "./greenery.ts";
 import { ARCADES, arcade, LOOKS, type MeshRef, PAINT, PLACED, type Piece, REBUILDS, type Rings, STRUCTURES, type Structure, TOPS, TOWERS, UMBRELLAS, umbrellas } from "./landmarks.ts";
@@ -868,7 +872,7 @@ for (const b of buildings) {
 const c2 = (v: number) => Math.round(v * 100) / 100;
 // 3b. Tall towers from OSM: replace the LoD2 mesh with the tower's building:parts (or its outline), extruded
 // from min_height to height; colours straight from the part's tags.
-type Mesh = (typeof meshes)[number] & { look?: { roof: number[] | null; wall: number[] | null; style: number | null; bare?: boolean | 1 | 2 | 3 } };
+type Mesh = (typeof meshes)[number] & { look?: { roof: number[] | null; wall: number[] | null; style: number | null; bare?: boolean | 1 | 2 | 3 | 4 } };
 function prism(ring: P2[], base: number, min: number, h: number, look: Mesh["look"]): Mesh {
   const c = centre(ring), roof: number[] = [], wall: number[] = [];
   let along = 0;
@@ -1301,7 +1305,7 @@ if (STYLED && (STYLE_PRESET.streetLamps || STYLE_PRESET.roofsOnPosts || STYLE_PR
     const fps = new Map<string, P2[][]>();
     for (const m of meshes as Mesh[]) { // buildings only: hand-built props (bare 3) carry a bounding box or a 100 m cell
       const f = m.footprint;
-      if (!f?.length || (m as { look?: { bare?: number } }).look?.bare === 3) continue;
+      if (!f?.length || (m as { look?: { bare?: number } }).look?.bare === 3 || (m as { look?: { bare?: number } }).look?.bare === 4) continue;
       const k = `${Math.floor(f[0][0] / 50)}_${Math.floor(f[0][1] / 50)}`; (fps.get(k) ?? fps.set(k, []).get(k)!).push(f);
     }
     const covered = (ring: P2[]) => {
@@ -1325,6 +1329,44 @@ if (STYLED && (STYLE_PRESET.streetLamps || STYLE_PRESET.roofsOnPosts || STYLE_PR
     pushAll(meshes, roofs.map(fromPiece));
     console.log(`  roofs on posts: ${roofs.length / 2}`);
   }
+}
+// preset graves: the graves ground.ts laid out in each cemetery, in 3D (graves.ts)
+if (STYLED && styleOf(region.style).graves) {
+  const fp = join(DERIVED, name, "ground", "features.json");
+  let n = 0;
+  if (existsSync(fp)) for (const f of readJson(fp) as Array<{ k: string; g?: number[] }>) {
+    if (f.k !== "cemetery" || !f.g) continue;
+    pushAll(meshes, graves3d(f.g, groundAt).map(fromPiece));
+    n += f.g.length / 4;
+  }
+  console.log(`  graves: ${n}`);
+}
+// preset pitchMarkings: windscreens round the tennis courts (courts.ts; built like the hedges)
+if (STYLED && styleOf(region.style).pitchMarkings) {
+  const fp = join(DERIVED, name, "ground", "features.json");
+  const fs = existsSync(fp) ? (readJson(fp) as Parameters<typeof hedges3d>[0]).filter((f) => f.k === "screen") : [];
+  pushAll(meshes, hedges3d(fs, groundAt).map(fromPiece));
+  console.log(`  tennis windscreens: ${fs.length}`);
+}
+// preset gardens: the hedges and fences ground.ts laid out along the property lines (gardens.ts)
+if (STYLED && styleOf(region.style).gardens) {
+  const fp = join(DERIVED, name, "ground", "features.json");
+  const fs = existsSync(fp) ? (readJson(fp) as Parameters<typeof hedges3d>[0]).filter((f) => f.k === "hedge" || f.k === "fence") : [];
+  pushAll(meshes, hedges3d(fs, groundAt).map(fromPiece));
+  const sheds = existsSync(fp) ? (readJson(fp) as Parameters<typeof sheds3d>[0]).filter((f) => f.k === "shed") : [];
+  pushAll(meshes, sheds3d(sheds, groundAt).map(fromPiece));
+  console.log(`  garden hedges: ${fs.filter((f) => f.k === "hedge").length}, allotment sheds: ${sheds.length}`);
+}
+// preset pitchMarkings: tennis nets on the courts ground.ts laid out (courts.ts)
+if (STYLED && styleOf(region.style).pitchMarkings) {
+  const fp = join(DERIVED, name, "ground", "features.json");
+  let n = 0;
+  if (existsSync(fp)) for (const f of readJson(fp) as Array<{ k: string; v?: number; g?: number[] }>) {
+    if (f.k !== "pitch" || f.v !== 2 || !f.g?.length) continue;
+    pushAll(meshes, nets3d(f.g, groundAt).map(fromPiece));
+    n += f.g.length / 5;
+  }
+  console.log(`  tennis nets: ${n}`);
 }
 // preset barriers: fences, walls, rails (pieces) and hedges (rows of bushes where the surface model found none)
 if (STYLED && styleOf(region.style).barriers && existsSync(join(raw, "osm-barriers.json"))) {

@@ -1,0 +1,9 @@
+Paint image 1 as a clean, SIMPLE isometric illustration in EXACTLY the style of image 3 and of image 1 itself: flat-shaded 3D blocks with a thin dark outline along every edge, each surface one flat colour, low-poly faceted tree crowns with a dark outline, soft even daylight.
+
+The subject is the Schlossplatz, Stuttgart's large central square between the palace and the long colonnaded building on its far side. Repaint the SQUARE itself as it really is, using image 4 (the real aerial photo, pixel-aligned with image 1) for the TRUE shape, size and position of every lawn, path, tree and fountain:
+- Large, flat, well-kept lawns in fresh green, cut by wide straight paths of pale beige gravel in a symmetrical pattern, with low stone kerbs along the lawn edges.
+- In the centre a tall slender stone column on a stepped square base, crowned by a small bronze figure.
+- Two round fountains, one on each side of the column, with a wide stone basin, clear blue water and a small central bowl with a jet.
+- A small round open music pavilion of dark green cast iron with a domed roof, where image 4 shows it.
+- Rows of clipped trees along the edges of the square, exactly where image 1 and image 4 have them; a few people-free benches along the paths.
+Everything else (every building around the square, the streets, the palace garden, cars and trees outside the square) stays EXACTLY as in image 1; do not move or restyle anything there. Same camera and scale as image 1. No people, no text, lettering, banners, flags, posters, logos or signs anywhere.

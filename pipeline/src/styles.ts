@@ -105,6 +105,19 @@ export interface StylePreset {
   /** Football pitches (OSM leisure=pitch, sport=soccer) marked out (page/ground.ts): touchlines, halfway line, centre
    *  circle, penalty and goal areas, spots, arcs and goals, scaled to the pitch, over mowing stripes. */
   pitchMarkings: boolean;
+  /** Cemeteries (OSM landuse=cemetery, amenity=grave_yard) filled with rows of graves (page/ground.ts): planted beds
+   *  with a headstone each, aligned to the cemetery's own path grid (ground.ts measures it); paths and trees on top. */
+  graves: boolean;
+  /** Footpaths, plazas, cycleways and parking lots with an ink outline and an inner shadow along the edge, like the
+   *  streets' kerbs, and crisp stall lines (page/ground.ts; as the AI paints them: they pop out of the lawns). */
+  pathInk: boolean;
+  /** House gardens framed by hedges and fences along the ALKIS property lines (sources "lgl"; gardens.ts: laid out by
+   *  ground.ts, shadows on the ground, 3D in scene.ts), as the AI paints every plot in Stuttgart. */
+  gardens: boolean;
+  /** Tree shadows on the ground drawn after paths and streets (they fall across them), as one shape (no darker
+   *  overlaps), each touching its trunk's foot: `alpha`, and a soft edge `blur` (m) (page/ground.ts). null: the soft
+   *  contact shadows under paths. */
+  treeShadow: { alpha: number; blur: number } | null;
   /** Lessons from AI repaints of the render (Stuttgart): the ground in the painted house style (green gardens and
    *  parks, one dark asphalt with an ink kerb line, kerb shadows, bold markings, rounded inside corners; ponds with a
    *  shore path; runways with markings and lights, mown grass strips; tracks on shared gravel beds with bold rails,
@@ -134,13 +147,13 @@ const PL_HOMES = [
 ];
 
 /** Stuttgart (the first styled region): contact shadows only. */
-const STUTTGART: StylePreset = { castShadow: null, walls: null, monumental: [], eaves: { overhang: 0.4, verge: 0.25, gutters: false }, creaseInk: 0.55, eavesShadow: true, sawtoothRoofs: 10000, trunks: false, streetDetail: false, lawns: false, richTrees: false, bushes: false, bridgeDetail: false, bridgeAbutments: true, powerLines: false, playgrounds: false, waterDetail: false, parkedCars: true, barriers: false, streetLamps: false, roofsOnPosts: false, streetFurniture: false, closedLines: true, roofDetail: false, bigRoofs: true, flatRoofDetail: true, insetWindows: true, wholeWindows: true, constructionSites: true, pitchMarkings: true, repaint: true, ink: { strength: 0.75, from: 0.35, to: 1.2, ao: 0.38 } };
+const STUTTGART: StylePreset = { castShadow: null, walls: null, monumental: [], eaves: { overhang: 0.4, verge: 0.25, gutters: false }, creaseInk: 0.55, eavesShadow: true, sawtoothRoofs: 10000, trunks: false, streetDetail: false, lawns: false, richTrees: false, bushes: false, bridgeDetail: false, bridgeAbutments: true, powerLines: false, playgrounds: false, waterDetail: false, parkedCars: true, barriers: false, streetLamps: false, roofsOnPosts: false, streetFurniture: false, closedLines: true, roofDetail: false, bigRoofs: true, flatRoofDetail: true, insetWindows: true, wholeWindows: true, constructionSites: true, pitchMarkings: true, graves: true, pathInk: true, gardens: true, treeShadow: { alpha: 0.6, blur: 0.4 }, repaint: true, ink: { strength: 0.75, from: 0.35, to: 1.2, ao: 0.38 } };
 
 export const STYLES = {
   /** Stuttgart (the first styled region): contact shadows only. */
   stuttgart: STUTTGART,
   /** Zagreb: Stuttgart's look as it was before parked cars and big roofs (the input its painter repaints). */
-  zagreb: { ...STUTTGART, eaves: null, sawtoothRoofs: 0, parkedCars: false, bigRoofs: false, insetWindows: false, wholeWindows: false, constructionSites: false, pitchMarkings: false, bridgeAbutments: false },
+  zagreb: { ...STUTTGART, eaves: null, sawtoothRoofs: 0, parkedCars: false, bigRoofs: false, insetWindows: false, wholeWindows: false, constructionSites: false, pitchMarkings: false, graves: false, pathInk: false, gardens: false, treeShadow: null, bridgeAbutments: false },
   /** Polish towns (Wieliczka): cool, soft cast shadows, the shade side of a sunny day. */
   poland: {
     castShadow: [0.60, 0.64, 0.80],
@@ -180,6 +193,10 @@ export const STYLES = {
     wholeWindows: false,
     constructionSites: false,
     pitchMarkings: false,
+    graves: false,
+    gardens: false,
+    pathInk: false,
+    treeShadow: null,
     repaint: false,
     // crisper: lines from smaller creases and darker, deeper corners
     ink: { strength: 0.9, from: 0.2, to: 0.75, ao: 0.55 },
