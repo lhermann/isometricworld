@@ -12,7 +12,7 @@ type P2 = [number, number];
 /** p, u: pavement sides and surface (src/ground.ts, preset streetDetail); s: a track line's surface kind; ref: a
  *  runway's designators; sh: a sheltered platform */
 export interface Feature { k: string; r?: P2[][]; l?: P2[]; w?: number; o?: 1; n?: number; y?: number; j?: number[][]; v?: number; b?: 1; e?: number[]; s?: string; p?: number; u?: string; ref?: string; sh?: 1; g?: number[] }
-interface Objects { b: Array<[P2[], number, number, number | null]>; t: Array<[number, number, number, number, number?]> }
+interface Objects { b: Array<[P2[], number, number, number | null]>; t: Array<[number, number, number, number, number?]>; s?: Array<[number, number, number, number, number?]> }
 
 const FILL: Record<string, string> = {
   residential: "#dcd5c6", commercial: "#dfdbd2", industrial: "#cfcbc2", railyard: "#cfcbc2", campus: "#e1dacb",
@@ -735,6 +735,13 @@ export function drawGround(
   }
   // the fences themselves: a thin weathered line (posts and rails are below a pixel)
   ctx.beginPath();
+  // preset gardens: paved paths from the street to the front door
+  for (const f of features) if (f.k === "gpath" && f.l) {
+    ctx.beginPath(); ctx.moveTo(f.l[0][0], f.l[0][1]); for (const p of f.l.slice(1)) ctx.lineTo(p[0], p[1]);
+    ctx.lineCap = "butt"; ctx.lineWidth = (f.w ?? 1.2) + 0.3; ctx.strokeStyle = "#a9a192"; ctx.stroke();
+    ctx.lineWidth = f.w ?? 1.2; ctx.strokeStyle = "#e4ddd0"; ctx.stroke(); ctx.lineCap = "round";
+  }
+  ctx.beginPath();
   for (const f of features) if (f.k === "fence" && f.l) { ctx.moveTo(f.l[0][0], f.l[0][1]); for (const p of f.l.slice(1)) ctx.lineTo(p[0], p[1]); }
   ctx.lineWidth = 0.3; ctx.lineCap = "butt"; ctx.strokeStyle = "rgba(92,86,74,0.75)"; ctx.stroke(); ctx.lineCap = "round";
   // preset treeShadow: crowns' shadows over everything on the ground, one shape (overlaps don't darken twice), each
@@ -742,7 +749,7 @@ export function drawGround(
   // softly blurred
   if (treeShadow) {
     ctx.beginPath();
-    for (const [x, y, r] of objects.t) {
+    for (const [x, y, r] of [...objects.t, ...(objects.s ?? [])]) { // crowns and bushes (preset gardens)
       const R = r * 1.15, cx = x + SHADOW_DIR[0] * R, cy = y + SHADOW_DIR[1] * R;
       if (cx + R < x0 - 15 || cx - R > x1 + 15 || cy + R < y0 - 15 || cy - R > y1 + 15) continue;
       ctx.moveTo(cx + R, cy); ctx.arc(cx, cy, R, 0, Math.PI * 2);

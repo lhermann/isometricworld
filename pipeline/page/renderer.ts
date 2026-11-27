@@ -179,7 +179,7 @@ function buildGround(tx: number, ty: number, data?: TileObjects) {
   // bridges (styled regions): off the ground, onto their own deck above the gap (bridges.ts)
   const bridges = STYLED ? visible.filter((f) => f.b && f.l && f.l.length >= 2) : [];
   // LoD2 footprints cast the same contact shadows as extruded buildings
-  const shadows = { b: [...(data?.b ?? []), ...(data?.m ?? []).filter((m) => !m[9] || m[9] < 2).map((m) => [m[4], m[5], m[0], null] as [P2[], number, number, null])], t: data?.t ?? [] };
+  const shadows = { b: [...(data?.b ?? []), ...(data?.m ?? []).filter((m) => !m[9] || m[9] < 2).map((m) => [m[4], m[5], m[0], null] as [P2[], number, number, null])], t: data?.t ?? [], s: data?.s ?? [] };
   const ctx = cv.getContext("2d")!;
   // regions with cast shadows (post pass) skip the short contact shadows, which would point the same way
   drawGround(ctx, bridges.length ? visible.filter((f) => !bridges.includes(f)) : visible, [x0, y0, x1, y1], GROUND_MPT, SHADOWS ? { b: [], t: [] } : shadows, ground, STYLED ? SHADOW : undefined, STYLED && STYLE.lawns, false, STYLED && STYLE.waterDetail, STYLED && STYLE.repaint, STYLED && STYLE.pathInk, STYLED ? STYLE.treeShadow : null);
@@ -492,7 +492,7 @@ type P2 = [number, number];
 export interface TileObjects {
   b: Array<[P2[], number, number, number | null]>; // ring, height, style, ground hint (ellipsoid)
   t: Array<[number, number, number, number, number?]>; // x, y, radius, crown height, species (Zagreb: species.ts)
-  s?: Array<[number, number, number, number]>;     // bushes and hedges: x, y, radius, top (preset bushes)
+  s?: Array<[number, number, number, number, number?]>; // bushes and hedges: x, y, radius, top (preset bushes), bloom (preset gardens)
   /** LoD2 meshes: style, roof kind, roof xyz[], wall (xyz, along, above base)[], footprint, height, seed */
   m?: Array<[number, number, number[], number[], P2[], number, number, (number[] | null)?, (number[] | null)?, (number | null)?, number?, number?]>; // … osm roof, osm wall, bare (no roof furniture), storeys, façade flags (scene.ts facadeFlags)
 }
@@ -1948,8 +1948,9 @@ function buildObjects(data: TileObjects) {
     objects.add(new THREE.Mesh(geo, buildingMaterial));
   }
   if (data.t.length && STYLED && STYLE.richTrees) objects.add(...richTrees(data.t, ground, treeMaterial, SUN));
-  if (data.s?.length && STYLED && STYLE.richTrees) objects.add(...richBushes(data.s, ground, SUN));
-  else if (data.t.length) {
+  if (data.s?.length && STYLED && (STYLE.richTrees || STYLE.gardens)) objects.add(...richBushes(data.s, ground, SUN));
+  // plain crowns unless rich bushes took this branch before (kept as it was for presets with richTrees)
+  if (!(data.s?.length && STYLED && STYLE.richTrees) && data.t.length) {
     const crowns = new THREE.InstancedMesh(STYLED ? CROWN : new THREE.IcosahedronGeometry(1, 2), treeMaterial, data.t.length);
     const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 6).rotateX(Math.PI / 2).translate(0, 0, 0.5), treeMaterial, data.t.length);
     const m = new THREE.Matrix4(), c = new THREE.Color(), bark = STYLED && STYLE.repaint ? new THREE.Color(0.40, 0.31, 0.23) : new THREE.Color(0.45, 0.36, 0.28);

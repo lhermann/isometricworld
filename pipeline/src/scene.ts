@@ -333,7 +333,7 @@ const tlvCover: P2[][] = [];
 const tlvRecs: Array<{ b: Building; holes: P2[][]; id: number }> = [];
 
 const trees: Array<[number, number, number, number, number?]> = [];
-const shrubs: Array<[number, number, number, number]> = []; // bushes and hedges (preset bushes)
+const shrubs: Array<[number, number, number, number, number?]> = []; // bushes and hedges (preset bushes; preset gardens: planted edges, 5th a bloom colour)
 const mappedTrees: P2[] = []; // zg3d: OSM natural=tree, which generated crowns keep clear of
 const meshes: Lod2Building[] = [];
 
@@ -852,7 +852,7 @@ if (OSM_MESH) {
 console.log(`  tree crowns: ${trees.length}`);
 
 // 4. Bin objects by the render tiles they can appear on (base … top, + margin).
-type Bin = { b: Array<[P2[], number, number, number | null]>; m: unknown[]; t: Array<(typeof trees)[number]>; s?: Array<[number, number, number, number]> };
+type Bin = { b: Array<[P2[], number, number, number | null]>; m: unknown[]; t: Array<(typeof trees)[number]>; s?: Array<(typeof shrubs)[number]> };
 const bins = new Map<string, Bin>();
 const add = (minx: number, miny: number, maxx: number, maxy: number, fn: (bin: Bin) => void) => {
   for (let ty = Math.floor((miny - 8) / T); ty <= Math.floor((maxy + 8) / T); ty++)
@@ -1355,6 +1355,12 @@ if (STYLED && styleOf(region.style).gardens) {
   pushAll(meshes, hedges3d(fs, groundAt).map(fromPiece));
   const sheds = existsSync(fp) ? (readJson(fp) as Parameters<typeof sheds3d>[0]).filter((f) => f.k === "shed") : [];
   pushAll(meshes, sheds3d(sheds, groundAt).map(fromPiece));
+  const before = shrubs.length;
+  if (existsSync(fp)) for (const f of readJson(fp) as Array<{ k: string; g?: number[] }>) {
+    if (f.k !== "bushes" || !f.g) continue;
+    for (let q = 0; q < f.g.length; q += 5) shrubs.push([f.g[q], f.g[q + 1], f.g[q + 2], f.g[q + 3], f.g[q + 4]]);
+  }
+  console.log(`  garden bushes: ${shrubs.length - before}`);
   console.log(`  garden hedges: ${fs.filter((f) => f.k === "hedge").length}, allotment sheds: ${sheds.length}`);
 }
 // preset pitchMarkings: tennis nets on the courts ground.ts laid out (courts.ts)
@@ -1440,7 +1446,7 @@ for (const s of shrubs) {
   const g = groundAt(s[0], s[1]), r = s[2] / CAMERA.mpp;
   const a = enuToPixel([s[0], s[1], g - 3]), c = enuToPixel([s[0], s[1], g + 3 + s[3]]);
   add(Math.min(a[0], c[0]) - r, Math.min(a[1], c[1]) - r, Math.max(a[0], c[0]) + r, Math.max(a[1], c[1]) + r,
-    (bin) => (bin.s ??= []).push(s.map((v) => Math.round(v * 10) / 10) as [number, number, number, number]));
+    (bin) => (bin.s ??= []).push(s.map((v) => Math.round(v! * 10) / 10) as (typeof shrubs)[number]));
 }
 for (const [k, v] of bins) writeFileSync(join(out, `${k}.json`), JSON.stringify(v.m.length ? v : { b: v.b, t: v.t, ...(v.s ? { s: v.s } : {}) }));
 console.log(`  ${bins.size} tile bins -> ${out}`);

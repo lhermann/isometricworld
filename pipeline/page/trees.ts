@@ -238,20 +238,22 @@ const TRUNK = new THREE.CylinderGeometry(1, 1, 1, 6).rotateX(Math.PI / 2).transl
 
 /** Shrub greens: privet and hornbeam hedges, box, thuja, lilac and hazel bushes. */
 const SHRUBS = [[0.34, 0.52, 0.20], [0.30, 0.47, 0.19], [0.24, 0.41, 0.21], [0.40, 0.56, 0.24], [0.36, 0.50, 0.26]];
+/** flowering (5th value, preset gardens): rhododendron pink, white spiraea, lilac, forsythia yellow */
+const BLOOM = [[0.93, 0.62, 0.74], [0.95, 0.94, 0.90], [0.74, 0.60, 0.85], [0.96, 0.84, 0.36]];
 /**
  * Instanced bushes and hedges ([x, y, radius, top above the ground]): lobed round bushes from the ground up to
  * their measured top, tall narrow ones (2 m+, under 1.1 m radius) mostly thujas; no trunks.
  */
-export function richBushes(bushes: Array<[number, number, number, number]>, ground: (x: number, y: number) => number, sun: THREE.Vector3): THREE.Object3D[] {
+export function richBushes(bushes: Array<[number, number, number, number, number?]>, ground: (x: number, y: number) => number, sun: THREE.Vector3): THREE.Object3D[] {
   const G = geometries(), groups = new Map<THREE.BufferGeometry, Array<[THREE.Matrix4, THREE.Color]>>();
   const q = new THREE.Quaternion(), Z = new THREE.Vector3(0, 0, 1);
-  for (const [x, y, r, top] of bushes) {
+  for (const [x, y, r, top, bloom] of bushes) {
     const g = ground(x, y), v = Math.floor(hash(x * 2.7, y * 3.3) * VARIANTS), m = new THREE.Matrix4();
     const thuja = top >= 2 && r < 1.1 && hash(y * 1.9, x * 4.1) < 0.7;
     q.setFromAxisAngle(Z, hash(x * 5.3, y * 2.9) * Math.PI * 2);
     if (thuja) m.compose(new THREE.Vector3(x, y, g + 0.02), q, new THREE.Vector3(r * 0.85, r * 0.85, Math.max(0.8, top)));
     else m.compose(new THREE.Vector3(x, y, g + top / 2), q, new THREE.Vector3(r, r, Math.max(0.35, top / 2)));
-    const base = thuja ? SHRUBS[2] : SHRUBS[Math.floor(hash(Math.floor(x / 25), Math.floor(y / 25)) * SHRUBS.length)];
+    const base = bloom && !thuja ? BLOOM[bloom - 1] : thuja ? SHRUBS[2] : SHRUBS[Math.floor(hash(Math.floor(x / 25), Math.floor(y / 25)) * SHRUBS.length)];
     const j = (k: number) => 0.9 + 0.2 * hash(x + k * 17.3, y - k * 5.1);
     const geo = (thuja ? G.thuja : G.round)[v];
     (groups.get(geo) ?? groups.set(geo, []).get(geo)!).push([m, new THREE.Color(base[0] * j(0), base[1] * j(1), base[2] * j(2))]);

@@ -940,7 +940,7 @@ if (GARDENS && existsSync(parcelsFile(name))) {
   const box = [Math.min(...cs.map((c) => c[0])), Math.min(...cs.map((c) => c[1])), Math.max(...cs.map((c) => c[0])), Math.max(...cs.map((c) => c[1]))];
   const lines = gardenLines(readJson(parcelsFile(name)).parcels, dwellings, features, toEnu, box);
   for (const f of lines) features.push(f);
-  console.log(`  gardens: ${lines.filter((f) => f.k === "hedge").length} hedges, ${lines.filter((f) => f.k === "fence").length} fences`);
+  console.log(`  gardens: ${lines.filter((f) => f.k === "hedge").length} hedges, ${lines.filter((f) => f.k === "fence").length} fences, ${lines.reduce((q, f) => q + (f.k === "bushes" ? f.g!.length / 5 : 0), 0)} bushes, ${lines.filter((f) => f.k === "gpath").length} front paths`);
 }
 writeFileSync(join(out, "features.json"), JSON.stringify(features));
 let lo = Infinity, hi = -Infinity;
