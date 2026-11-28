@@ -471,12 +471,25 @@ if (LOD2) {
   const box = [bbox[0] - m, bbox[1] - m, bbox[2] + m, bbox[3] + m];
   let ndom: (x: number, y: number) => number, toXy = toUtm, fromXy = fromUtm;
   if (region.sources === "lgl") {
+    // preset powerLines: the model's pylons are 15 m posts (function 51002_1251, mast); power.ts builds the OSM pylons
+    // instead, so a mast within 8 m of an OSM tower goes (other masts stay)
+    const pylons: P2[] = STYLED && styleOf(region.style).powerLines && existsSync(join(raw, "osm-power.json"))
+      ? readJson(join(raw, "osm-power.json")).elements.filter((e: { type: string; tags?: Record<string, string> }) => e.type === "node" && /^(tower|portal)$/.test(e.tags?.power ?? ""))
+        .map((e: { lat: number; lon: number }) => toUtm(e.lat, e.lon) as unknown as P2) : []; // LoD2 outlines are UTM here
+    let posts = 0;
     for (const f of lod2Files(box)) {
-      const bs = parseLod2(f.xml, box, GEOID);
+      const bs = parseLod2(f.xml, box, GEOID).filter((b) => {
+        if (b.fn !== "51002_1251" || !pylons.length) return true;
+        const pts = b.xy.flat(), c: P2 = [pts.reduce((s, q) => s + q[0], 0) / pts.length, pts.reduce((s, q) => s + q[1], 0) / pts.length];
+        const near = pylons.some((q) => Math.hypot(q[0] - c[0], q[1] - c[1]) < 8);
+        if (near) posts++;
+        return !near;
+      });
       pushAll(meshes, bs);
       process.stdout.write(`\r  lod2: ${meshes.length} buildings (${f.name.split("/").pop()})        `);
     }
     process.stdout.write("\n");
+    if (posts) console.log(`  lod2: ${posts} pylon posts left to the OSM pylons (preset powerLines)`);
     ndom = (await rasterSampler("ndom1", box)).px;
   } else {
     // OSM outlines (fetch.ts osm-buildings.json): closed outer rings
@@ -529,6 +542,20 @@ if (LOD2) {
     const all = rings.flat();
     over.push({ r: rings, b: [Math.min(...all.map((q) => q[0])), Math.min(...all.map((q) => q[1])), Math.max(...all.map((q) => q[0])), Math.max(...all.map((q) => q[1]))] });
   }
+  const water: Array<{ r: P2[][]; b: number[] }> = [];
+  // in the water further out than the crown's radius (at least 3 m): bank trees overhang it
+  const deepWater = (p: P2, r: number) => water.some(({ r: rings, b }) => p[0] >= b[0] && p[0] <= b[2] && p[1] >= b[1] && p[1] <= b[3] &&
+    rings.filter((q) => inside(p, q)).length % 2 === 1 && rings.every((q) => q.every((v, i) => segDist(p, q[(i + q.length - 1) % q.length], v) > Math.max(3, r))));
+  // a river's multipolygon is split over many member ways, each tested above as if it were a ring: the Neckar let
+  // crowns stand in the water. The water areas ground.ts joined (with their islands as holes) too; LGL nDOM1 only
+  {
+    const fp = join(DERIVED, name, "ground", "features.json");
+    if (region.sources === "lgl" && existsSync(fp)) for (const f of readJson(fp) as Array<{ k: string; r?: P2[][] }>) {
+      if (f.k !== "water" || !f.r?.length) continue;
+      const all = f.r.flat();
+      water.push({ r: f.r, b: [Math.min(...all.map((q) => q[0])), Math.min(...all.map((q) => q[1])), Math.max(...all.map((q) => q[0])), Math.max(...all.map((q) => q[1]))] });
+    }
+  }
   // ... and on the roadway, where slim "crowns" are traffic-light and catenary masts (Berliner Platz had two
   // 1.6 m wide, 16 m tall "trees" between the tracks): segments of roads and tram lines in a 50 m hash
   const ROADWAY = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|service|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$/;
@@ -561,7 +588,7 @@ if (LOD2) {
   for (const [i, c] of cs.entries()) {
     if (foliage && !foliage[i]) { bare++; continue; }
     const [lat, lon] = fromXy(c.e, c.n), p = toEnu(lon, lat);
-    if (onDeck([p[0], p[1]]) || overWater([p[0], p[1]])) { bridged++; continue; }
+    if (onDeck([p[0], p[1]]) || overWater([p[0], p[1]]) || deepWater([p[0], p[1]], c.r)) { bridged++; continue; }
     if (wallEdge(c)) { edges++; continue; }
     if (region.sources === "lgl" && (c.r < 2.5 || c.h > 5 * c.r) && onRoadway([p[0], p[1]])) { poles++; continue; }
     // there, cranes and masts are tall and slim: a tree is wide for its height and under ~25 m
@@ -1253,7 +1280,7 @@ if (STYLED && styleOf(region.style).powerLines && existsSync(join(raw, "osm-powe
   const { pieces, towers } = powerLines(readJson(join(raw, "osm-power.json")), (lon, lat) => { const e = toEnu(lon, lat); return [e[0], e[1]]; }, groundAt,
     (p) => p[0] >= ex[0] && p[0] <= ex[2] && p[1] >= ex[1] && p[1] <= ex[3]);
   pushAll(meshes, pieces.map(fromPiece));
-  dropCrowns((p) => towers.some((t) => Math.hypot(p[0] - t[0], p[1] - t[1]) < 4));
+  dropCrowns((p) => towers.some((t) => Math.hypot(p[0] - t[0], p[1] - t[1]) < (region.sources === "lgl" ? 8 : 4))); // LGL nDOM1 reads the steel as a crown up to ~6 m out
   console.log(`  power lines: ${towers.length} pylons, ${pieces.length - 2 * towers.length} spans`);
 }
 // preset playgrounds: the equipment (playgrounds.ts; its pads and sandpits are on the ground, ground.ts)

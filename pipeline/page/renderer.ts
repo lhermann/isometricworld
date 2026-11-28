@@ -300,6 +300,20 @@ function buildDecks(ctx: CanvasRenderingContext2D, osmBridges: Feature[], [x0, y
   /** a concrete quad into the fascia mesh (both sides drawn), lit by its normal */
   const quad = (q: number[][], n: number[]) => { for (const k of [0, 1, 2, 0, 2, 3]) { side.push(...q[k]); sideN.push(...n); } };
   const top: number[] = [], uv: number[] = [], side: number[] = [], sideN: number[] = [];
+  // preset bridgeParapets "outer": no parapet where another deck at the same height runs right beside this one (OSM
+  // maps a wide bridge as one way per carriageway, tram and footway: walls stood between its lanes)
+  const OUTER = BRIDGE_DETAIL && STYLE.bridgeParapets === "outer";
+  const others = OUTER ? bridges.map((f) => ({ f, l: f.l!, deck: deckHeight(f.l!, ground, f.e), half: f.k === "rail" ? 2.5 : (f.w ?? 6) / 2 + CORNICE })) : [];
+  const besideDeck = (self: Feature, x: number, y: number, z: number) => others.some((o) => {
+    if (o.f === self) return false;
+    for (let i = 1; i < o.l.length; i++) {
+      const [ax, ay] = o.l[i - 1], [bx, by] = o.l[i], dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)), px = ax + dx * t, py = ay + dy * t;
+      if (Math.hypot(x - px, y - py) > o.half + 0.6) continue;
+      if (Math.abs(o.deck.at(o.deck.cum[i - 1] + Math.sqrt(L2) * t, px, py) - z) < 1.5) return true;
+    }
+    return false;
+  });
   const U = (x: number, y: number) => [(x - x0) / (x1 - x0), (y - y0) / (y1 - y0)];
   ctx.save();
   ctx.fillStyle = "rgba(40,40,48,0.28)";
@@ -341,6 +355,7 @@ function buildDecks(ctx: CanvasRenderingContext2D, osmBridges: Feature[], [x0, y
       if (BRIDGE_DETAIL) for (const sgn of [1, -1]) {
         const at = (p: typeof a, n: number[], ln: number, o: number) => [p.x + (sgn * n[0] * o) / ln, p.y + (sgn * n[1] * o) / ln];
         const ao = at(a, na, la, half - 0.1), bo = at(b, nb, lb, half - 0.1), ai = at(a, na, la, half - 0.4), bi = at(b, nb, lb, half - 0.4);
+        if (OUTER) { const m = at(a, na, la, half + 0.3), n = at(b, nb, lb, half + 0.3); if (besideDeck(f, m[0], m[1], a.z) || besideDeck(f, n[0], n[1], b.z)) continue; }
         const out = [(sgn * na[0]) / la, (sgn * na[1]) / la, 0];
         quad([[ao[0], ao[1], a.z], [bo[0], bo[1], b.z], [bo[0], bo[1], b.z + PARAPET], [ao[0], ao[1], a.z + PARAPET]], out);
         quad([[ai[0], ai[1], a.z], [bi[0], bi[1], b.z], [bi[0], bi[1], b.z + PARAPET], [ai[0], ai[1], a.z + PARAPET]], [-out[0], -out[1], 0]);

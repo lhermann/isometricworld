@@ -139,7 +139,7 @@ buildings and trees come from it and which from OSM.
 
 ### 4. Look
 
-**Styled** (`look: "styled"`, a preset in `styles.ts`). The renderer picks a facade style per building (`scene.ts` → `kind = 10 + style`):
+**Styled** (`look: "styled"`, a preset in `styles.ts`). Which features each preset has on, and the data each needs: README "Look features". The renderer picks a facade style per building (`scene.ts` → `kind = 10 + style`):
 shared styles 0 old plaster, 1 post-war, 2 public/sandstone, 3 tower, 4 shed, 5 office; 6 Zagreb's prefab slabs
 and 7–10 its landmarks (compiled with `#define ZG`), elsewhere 6 monumental walls (preset `monumental`); 11
 masonry (`portals.ts`), 12 multi-storey car park (ALKIS). A region's own styles take the next free numbers, behind

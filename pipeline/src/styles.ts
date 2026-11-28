@@ -57,6 +57,9 @@ export interface StylePreset {
   /** Only the abutments of bridgeDetail (ground.ts): decks carried on to where the embankment tops out, so the road
    *  meets its deck instead of sagging into the dip under the bridge end; parapets stay as they are. */
   bridgeAbutments: boolean;
+  /** Parapets of bridgeDetail: "both" edges of every bridge way, or only the "outer" ones (none where another deck runs
+   *  beside it at the same height: the carriageways, tram and footway of one bridge mapped as separate ways). */
+  bridgeParapets: "both" | "outer";
   /** High-voltage power lines from OSM (fetch.ts osm-power.json, power.ts): lattice pylons and sagging conductors. */
   powerLines: boolean;
   /** Playground equipment (fetch.ts osm-play.json, playgrounds.ts): what OSM maps, on public playgrounds without
@@ -147,13 +150,13 @@ const PL_HOMES = [
 ];
 
 /** Stuttgart (the first styled region): contact shadows only. */
-const STUTTGART: StylePreset = { castShadow: null, walls: null, monumental: [], eaves: { overhang: 0.4, verge: 0.25, gutters: false }, creaseInk: 0.55, eavesShadow: true, sawtoothRoofs: 10000, trunks: false, streetDetail: false, lawns: false, richTrees: false, bushes: false, bridgeDetail: false, bridgeAbutments: true, powerLines: false, playgrounds: false, waterDetail: false, parkedCars: true, barriers: false, streetLamps: false, roofsOnPosts: false, streetFurniture: false, closedLines: true, roofDetail: false, bigRoofs: true, flatRoofDetail: true, insetWindows: true, wholeWindows: true, constructionSites: true, pitchMarkings: true, graves: true, pathInk: true, gardens: true, treeShadow: { alpha: 0.6, blur: 0.4 }, repaint: true, ink: { strength: 0.75, from: 0.35, to: 1.2, ao: 0.38 } };
+const STUTTGART: StylePreset = { castShadow: null, walls: null, monumental: [], eaves: { overhang: 0.4, verge: 0.25, gutters: false }, creaseInk: 0.55, eavesShadow: true, sawtoothRoofs: 10000, trunks: false, streetDetail: true, lawns: false, richTrees: false, bushes: false, bridgeDetail: true, bridgeAbutments: true, bridgeParapets: "outer", powerLines: true, playgrounds: true, waterDetail: true, parkedCars: true, barriers: false, streetLamps: true, roofsOnPosts: false, streetFurniture: false, closedLines: true, roofDetail: true, bigRoofs: true, flatRoofDetail: true, insetWindows: true, wholeWindows: true, constructionSites: true, pitchMarkings: true, graves: true, pathInk: true, gardens: true, treeShadow: { alpha: 0.6, blur: 0.4 }, repaint: true, ink: { strength: 0.75, from: 0.35, to: 1.2, ao: 0.38 } };
 
 export const STYLES = {
   /** Stuttgart (the first styled region): contact shadows only. */
   stuttgart: STUTTGART,
   /** Zagreb: Stuttgart's look as it was before parked cars and big roofs (the input its painter repaints). */
-  zagreb: { ...STUTTGART, eaves: null, sawtoothRoofs: 0, parkedCars: false, bigRoofs: false, insetWindows: false, wholeWindows: false, constructionSites: false, pitchMarkings: false, graves: false, pathInk: false, gardens: false, treeShadow: null, bridgeAbutments: false },
+  zagreb: { ...STUTTGART, eaves: null, sawtoothRoofs: 0, parkedCars: false, bigRoofs: false, insetWindows: false, wholeWindows: false, constructionSites: false, pitchMarkings: false, graves: false, pathInk: false, gardens: false, treeShadow: null, bridgeAbutments: false, powerLines: false, richTrees: false, roofDetail: false, waterDetail: false, playgrounds: false, streetLamps: false, bridgeDetail: false, streetDetail: false },
   /** Polish towns (Wieliczka): cool, soft cast shadows, the shade side of a sunny day. */
   poland: {
     castShadow: [0.60, 0.64, 0.80],
@@ -177,6 +180,7 @@ export const STYLES = {
     bushes: true,
     bridgeDetail: true,
     bridgeAbutments: true,
+    bridgeParapets: "both",
     powerLines: true,
     playgrounds: true,
     waterDetail: true,

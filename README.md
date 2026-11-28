@@ -466,6 +466,52 @@ Without a 3D building source a region renders from OSM alone in the styled look:
 roofs from their tags, tree crowns from land cover (`greenery.ts`, `species.ts`), as Zagreb fills its model's gaps.
 Only Tel Aviv keeps the plain render.
 
+### Look features (style presets)
+
+Everything the styled look can draw is a field of `StylePreset` in `pipeline/src/styles.ts`, documented there; a
+region picks a preset with `style` in `places.ts`. A new city starts from the preset closest to it and switches
+fields on or off in its own preset. A field that needs data beyond OSM does nothing without it. After switching
+a field: `fetch` (fetches only what is missing, such as `osm-power.json`), then `ground`, `scene`, `render` and
+`export` per area.
+
+| Field | Draws | Needs | stuttgart | zagreb | poland |
+|---|---|---|---|---|---|
+| `castShadow` | sun shadows of buildings and trees | | – | – | on |
+| `walls` | wall palette per building style | | – | – | on |
+| `monumental` | building kinds as monumental walls | | – | – | churches |
+| `eaves` | roof overhangs, gutters | LoD2 roofs | on | – | on |
+| `trunks` | broadleaf crowns on a trunk | | – | – | on |
+| `streetDetail` | OSM sidewalks and surfaces | | on | – | on |
+| `lawns` | lawns where the orthophoto is green | `gugik` | – | – | on |
+| `richTrees` | lobed crowns, species shapes | | – | – | on |
+| `bushes` | bushes from the low surface model | `gugik` | – | – | on |
+| `bridgeDetail` | bridge decks, parapets, piers | | on | – | on |
+| `bridgeAbutments` | bridge ends carried to the embankment | | on | – | on |
+| `bridgeParapets` | parapets on both edges of each bridge way, or the outer ones only | | outer | – | both |
+| `powerLines` | pylons and conductors | `osm-power.json` | on | – | on |
+| `playgrounds` | playground equipment | `osm-play.json` | on | – | on |
+| `waterDetail` | shallows, banks, streams as lines | `osm-water.json` | on | – | on |
+| `parkedCars` | cars on lots and bays | `osm-parking.json` | on | – | on |
+| `barriers` | OSM fences, walls, hedges, guard rails | `osm-barriers.json` | – | – | on |
+| `streetLamps` | street lamps | `osm-furniture.json` | on | – | on |
+| `roofsOnPosts` | carports, canopies, shelters | `osm-furniture.json` | – | – | on |
+| `streetFurniture` | stops, benches, flags (Polish), signs | `osm-furniture.json` | – | – | on |
+| `closedLines` | closed road and path ways kept whole | | on | on | on |
+| `roofDetail` | tiles, seams, chimneys | | on | – | on |
+| `bigRoofs` | halls and plant on big flat roofs | | on | – | – |
+| `flatRoofDetail` | membranes, small roof units | | on | on | on |
+| `insetWindows` | windows set into the wall | | on | – | – |
+| `wholeWindows` | no windows cut by roofs | | on | – | – |
+| `constructionSites` | sites with machines and cranes | | on | – | – |
+| `pitchMarkings` | football pitches, tennis courts, running-track lanes | | on | – | – |
+| `graves` | rows of graves in cemeteries | | on | – | – |
+| `pathInk` | inked paths, plazas and lots | | on | – | – |
+| `gardens` | hedges, fences, bushes, allotments on property lines | ALKIS (`lgl`) | on | – | – |
+| `treeShadow` | tree shadows over paths and streets | | on | – | – |
+| `repaint` | the AI-repaint house style | | on | on | – |
+| `ink`, `creaseInk`, `eavesShadow` | outline strength, crease ink, eaves shadow | | set | set | set |
+| `sawtoothRoofs` | sawtooth roofs on halls over this size (m²) | | 10000 | – | – |
+
 ## Licence
 
 Code: [MIT](LICENSE). Map imagery and videos: CC BY 4.0 together with the data credits
