@@ -26,7 +26,7 @@ import { fromPuwg, gugikTerrain, orthoChunks, toPuwg } from "./gugik.ts";
 import { lawns } from "./lawns.ts";
 import { playLayout } from "./playgrounds.ts";
 import { parkLayout } from "./parking.ts";
-import { courtLayout } from "../page/ground.ts";
+import { courtLayout, fitRect } from "../page/ground.ts";
 import { lod2Files, rasterSampler, toUtm } from "./lgl.ts";
 import { parseLod2 } from "./lod2.ts";
 import { DERIVED, RAW, readJson } from "./paths.ts";
@@ -207,6 +207,19 @@ function surfaceOf(s?: string): string | undefined {
  * A track's ground by its surface: only running tracks are red tartan. Racecourses and riding tracks are sand,
  * gravel or grass (the Zagreb Hipodrom: a grass gallop track, a gravel trotting track, a sand training track).
  */
+/**
+ * Preset pitchMarkings: a grass or turf pitch for several sports (or none named) that has a football pitch's size and
+ * shape is marked out as one (sports parks map their football fields as sport=multi): its tightest rectangle 60–125
+ * × 40–90 m, 1.2–1.9 times as long as wide, and filling at least 85% of it.
+ */
+function footballField(t: Record<string, string>, ring: P2[]) {
+  if (t.sport && t.sport !== "multi") return false;
+  if (t.surface && !/^(grass|artificial_turf)$/.test(t.surface)) return false;
+  const R = fitRect(ring);
+  if (!R || R.L < 60 || R.L > 125 || R.W < 40 || R.W > 90 || R.L / R.W < 1.2 || R.L / R.W > 1.9) return false;
+  const area = Math.abs(ring.reduce((a, [x, y], i) => { const [u, v] = ring[(i + 1) % ring.length]; return a + x * v - u * y; }, 0)) / 2;
+  return area / (R.L * R.W) > 0.85;
+}
 function trackKind(t: Record<string, string>): string {
   const s = t.surface ?? "";
   if (/^(sand|dirt|earth|ground|unpaved|compacted|clay)$/.test(s)) return "sand";
@@ -304,13 +317,14 @@ for (const el of osm.elements) {
   if (el.type === "way" && el.geometry) {
     const g = geom(el.geometry);
     // a track way with a width is the track itself, closed or not (OSM: a closed leisure=track is a line unless area=yes)
-    const trackLine = t.leisure === "track" && t.area !== "yes" && Number(String(t.width).replace(",", ".")) > 0;
+    // (preset pitchMarkings: a closed one without a width too, as a lane line: filled, it covered the infield)
+    const trackLine = t.leisure === "track" && t.area !== "yes" && (Number(String(t.width).replace(",", ".")) > 0 || (PITCH_MARKINGS && closed(g)));
     if (closed(g) && !(t.highway && t.area !== "yes") && !t.railway && !trackLine) rings = [g];
     else if (trackLine || t.highway || t.railway || ["breakwater", "groyne", "pier"].includes(t.man_made) || /^(runway|taxiway)$/.test(t.aeroway ?? "")) {
       // a closed way as a ring, overlapping its first segment so the loop has no butt-end notch where it closes
       const ring = CLOSED_LINES && closed(g) ? simplifyRing(g.slice(0, -1), 0.3) : [];
       const l = ring.length > 2 ? [...ring, ring[1]] : simplifyLine(g, 0.3);
-      if (trackLine) { features.push({ k: "trackline", l, w: r1(Number(String(t.width).replace(",", "."))), s: trackKind(t) }); continue; }
+      if (trackLine) { features.push({ k: "trackline", l, w: r1(Number(String(t.width).replace(",", ".")) || 1.2), s: trackKind(t) }); continue; }
       if (t.aeroway) { // runway / taxiway centre lines at their width (OSM width, else 30 m / 10 m)
         const w = Number(String(t.width).replace(",", ".")) || (t.aeroway === "runway" ? 30 : 10);
         features.push({ k: GRASS.test(t.surface ?? "") ? "grassway" : t.aeroway, l, w: r1(w), ...(t.ref ? { ref: t.ref } : {}) });
@@ -366,7 +380,8 @@ for (const el of osm.elements) {
   const r = rings.map((q) => simplifyRing(q, 0.3)).filter((q) => q.length >= 4);
   if (!r.length) continue;
   features.push(k === "farm" || k === "meadow" ? { k, r, v: fieldShade(t, el.id) }
-    : k === "pitch" && PITCH_MARKINGS && t.leisure === "pitch" && /(^|;)\s*soccer\s*(;|$)/.test(t.sport ?? "") ? { k, r, v: 1 }
+    : k === "pitch" && PITCH_MARKINGS && t.leisure === "pitch" && (/(^|;)\s*soccer\s*(;|$)/.test(t.sport ?? "") || footballField(t, r[0])) ? { k, r, v: 1 }
+    : k === "track" && PITCH_MARKINGS && r.length >= 2 && !/cycling|horse|equestrian|motor|karting|dog/.test(t.sport ?? "") ? { k, r, v: 1 } // a running track round an infield: lanes
     : k === "pitch" && PITCH_MARKINGS && t.leisure === "pitch" && /(^|;)\s*tennis\s*(;|$)/.test(t.sport ?? "") ? { k, r, v: 2, ...(t.surface ? { s: t.surface } : {}), g: courtLayout(r).map((x) => Math.round(x * 1000) / 1000) } : { k, r });
   if (k === "water" || k === "wastewater") water.push({ r, river: /^(river|canal|stream|rapids)$/.test(t.water ?? "") || t.waterway === "riverbank" });
 }

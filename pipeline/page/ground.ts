@@ -212,7 +212,10 @@ export function drawGround(
   const ringArea = (r: P2[]) => Math.abs(r.reduce((a, [x, y], i) => { const [u, v] = r[(i + 1) % r.length]; return a + x * v - u * y; }, 0)) / 2;
   const areas: Feature[] = [];
   for (const k of AREA_ORDER) {
-    if (!NESTED.has(k)) areas.push(...of(k));
+    // pitches: plain ones (a stadium's whole grounds, other sports) under the marked ones (preset pitchMarkings: v),
+    // so a stadium outline doesn't cover its pitch (stable sort: no change without the preset)
+    if (k === "pitch") areas.push(...of(k).sort((a, b) => (a.v ? 1 : 0) - (b.v ? 1 : 0)));
+    else if (!NESTED.has(k)) areas.push(...of(k));
     else if (k === "park") areas.push(...features.filter((f) => NESTED.has(f.k)).sort((a, b) => ringArea(b.r![0]) - ringArea(a.r![0])));
   }
   // watercourses (preset waterDetail): a muddy bank, then the water; drawn just before the lakes and ponds, so a
@@ -309,6 +312,7 @@ export function drawGround(
       ctx.restore();
     }
     if (k === "pitch" && f.v === 1) { ctx.save(); ctx.clip("evenodd"); pitchMarks(ctx, f.r![0]); ctx.restore(); }
+    if (k === "track" && f.v === 1) { ctx.save(); ctx.clip("evenodd"); trackLanes(ctx, f.r!); ctx.restore(); }
     else if (k === "pitch" && f.v === 2) { ctx.save(); ctx.clip("evenodd"); tennisMarks(ctx, f.r!, f.s, f.g ?? courtLayout(f.r!), SHADOW_DIR); ctx.restore(); }
     else if (k === "pitch") { ctx.lineWidth = 0.25; ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke(); }
     if ((k === "parking" || k === "pitch") && styled && pathInk) inkedEdge(f.r!); // lots, pitches and courts: ink and inner shadow
@@ -879,6 +883,30 @@ function pitchMarks(ctx: CanvasRenderingContext2D, ring: P2[]) {
     ctx.beginPath(); ctx.moveTo(x, -g); ctx.lineTo(x + d, -g); ctx.lineTo(x + d, g); ctx.lineTo(x, g); ctx.stroke();
   }
   ctx.restore();
+}
+
+/**
+ * Lanes of a running track round its infield (preset pitchMarkings; ground.ts flags tracks with an inner ring, v: 1):
+ * white lines 1.22 m apart parallel to the infield's edge, as many as fit, and the kerb line on the edge. Each line is
+ * the infield outline stroked twice, white and a little narrower in the track's colour, widest first.
+ */
+function trackLanes(ctx: CanvasRenderingContext2D, rings: P2[][]) {
+  const outer = fitRect(rings[0]);
+  const LANE = 1.22, HALF = 0.1;
+  for (const inner of rings.slice(1)) {
+    const R = fitRect(inner);
+    if (!outer || !R || R.W < 20) continue;
+    const n = Math.min(8, Math.floor(((outer.W - R.W) / 2 - 0.3) / LANE));
+    if (n < 2) continue;
+    ctx.beginPath(); ctx.moveTo(inner[0][0], inner[0][1]); for (const p of inner.slice(1)) ctx.lineTo(p[0], p[1]); ctx.closePath();
+    ctx.lineJoin = "round";
+    for (let i = n; i >= 1; i--) {
+      ctx.lineWidth = 2 * (i * LANE + HALF); ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.stroke();
+      ctx.lineWidth = 2 * (i * LANE - HALF); ctx.strokeStyle = FILL.track; ctx.stroke();
+    }
+    ctx.lineWidth = 0.4; ctx.strokeStyle = "rgba(255,255,255,0.9)"; ctx.stroke(); // the kerb
+    ctx.lineJoin = "miter";
+  }
 }
 
 /** court surfaces (OSM surface=): clay (Germany's default), hard courts, grass and carpet keep the pitch green */
