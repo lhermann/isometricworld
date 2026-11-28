@@ -499,7 +499,9 @@ a field: `fetch` (fetches only what is missing, such as `osm-power.json`), then 
 | `closedLines` | closed road and path ways kept whole | | on | on | on |
 | `roofDetail` | tiles, seams, chimneys | | on | – | on |
 | `bigRoofs` | halls and plant on big flat roofs | | on | – | – |
-| `flatRoofDetail` | membranes, small roof units | | on | on | on |
+| `flatRoofDetail` | membranes, small roof units | | on | – | – |
+| `creaseInk` | ink where the surface turns (ridges, roof meets wall) | | 0.55 | – | – |
+| `eavesShadow` | soft shadow under the eaves of pitched roofs | | on | – | – |
 | `insetWindows` | windows set into the wall | | on | – | – |
 | `wholeWindows` | no windows cut by roofs | | on | – | – |
 | `constructionSites` | sites with machines and cranes | | on | – | – |
